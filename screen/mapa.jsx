@@ -1,41 +1,63 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Image, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Text, Image } from 'react-native';
 import * as Location from 'expo-location';
 import { Magnetometer } from 'expo-sensors';
-import MapView, { Marker } from 'react-native-maps';
+import * as ScreenOrientation from "expo-screen-orientation";
+import MapView, { Marker } from 'react-native-maps'; // Import MapView and Marker
 
 export default function MapaJanda() {
   const [location, setLocation] = useState(null);
-  const [heading, setHeading] = useState(0);
   const [magnetometro, setMagnetometro] = useState({});
-  const spinValue = new Animated.Value(0);
-
+  const [subscription, setSubscription] = useState(null);
+  
   useEffect(() => {
-    const magnetometroListener = (data) => {
-      setMagnetometro(data);
-      const magneticHeading = data?.magnetic?.z || 0;
-      setHeading(magneticHeading);
-      const positiveHeading = magneticHeading < 0 ? 360 + magneticHeading : magneticHeading;
-      Animated.timing(spinValue, {
-        toValue: positiveHeading,
-        duration: 500,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }).start();
-    };
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Não tem permissão');
+        return;
+      }
+
+      let info = await Location.getCurrentPositionAsync({});
+      console.log(info);
+      setLocation(info);
+    })();
+  }, []);
   
-    Magnetometer.addListener(magnetometroListener);
+  useEffect(() => {
+    async function setDefaultScreenOrientation() {
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    }
+    setDefaultScreenOrientation();
+    }, []);
+
+  const toggleListener = () => {
+    subscription ? unsubscribe() : subscribe();
+  };
+
+  const subscribe = () => {
+    setSubscription(Magnetometer.addListener(magnetometroListener));
+  };
+
+  const unsubscribe = () => {
+    subscription && subscription.remove();
+    setSubscription(null);
+  };
+
+  const requestLocationPermission = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
   
-    return () => {
-      Magnetometer.removeAllListeners();
-    };
-  }, [spinValue]);
+    if (status === 'granted') {
+      let info = await Location.getCurrentPositionAsync({});
+      setLocation(info);
+    }
+  };
+  
 
   useEffect(() => {
     const requestLocationPermission = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('Não tem permissão');
         return;
       }
 
@@ -46,26 +68,51 @@ export default function MapaJanda() {
     requestLocationPermission();
 
     return () => {
-      // Cleanup location subscription when component unmounts
       setLocation(null);
+      unsubscribe(); // Make sure to unsubscribe when the component unmounts
     };
   }, []);
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.container}>
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoText}>
-            Magnetometer:{'\n'}
-            x: {magnetometro.x} {'\n'}
-            y: {magnetometro.y} {'\n'}
-            z: {magnetometro.z} {'\n'}
-            Latitude: {location?.coords?.latitude || 'Loading...'}, Longitude: {location?.coords?.longitude || 'Loading...'}
-          </Text>
-        </View>
+  const magnetometroListener = (data) => {
+    setMagnetometro(data);
+    };
 
-        <View style={styles.mapcont}>
-          {location && location.coords && (
+    useEffect(() => {
+        toggleListener();
+        return () => {
+            unsubscribe();
+        };
+    }, []);
+
+    const getPositiveHeading = (heading) => {
+        return heading < 0 ? 360 + heading : heading;
+      };
+
+
+      return (
+        <View style={styles.container}>
+          <View style={styles.infoContainer}>
+            <Text style={styles.infoText}>
+              Magnetometro:{'\n'}
+              z: {magnetometro?.z || 'Loading...'} {'\n'}
+              Latitude: {location?.coords?.latitude || 'Loading...'}, Longitude: {location?.coords?.longitude || 'Loading...'}
+            </Text>
+          </View>
+          
+          
+            <Image
+              source={require('../assets/crepah.png')}
+              style={{
+                marginTop: 20,
+                width: 100,
+                height: 100,
+                alignSelf: 'center',
+                zIndex: 1,
+                transform: [{ rotate: `${getPositiveHeading(magnetometro.z || 0)}deg` }],
+              }}
+            />
+            <View style={styles.mapcont}>
+          {location && (
             <MapView
               style={styles.map}
               initialRegion={{
@@ -86,51 +133,34 @@ export default function MapaJanda() {
             </MapView>
           )}
         </View>
-
-        <Animated.Image
-          source={require('../assets/crepah.png')}
-          style={{
-            marginTop: 175,
-            width: 300,
-            height: 300,
-            alignSelf: 'center',
-            transform: [
-              {
-                rotate: spinValue.interpolate({
-                  inputRange: [0, 360],
-                  outputRange: ['0deg', '360deg'],
-                }),
-              },
-            ],
-            zIndex: -1,
-            position: 'absolute',
-          }}
-        />
-      </View>
-    </View>
-  );
+        </View>
+                
+      );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  infoContainer: {
-    paddingTop: 100,
-    paddingBottom: 100,
-  },
-  mapcont: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-  },
-  infoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-});
+    container: {
+      flex: 1,
+    },
+    infoContainer: {
+      paddingTop: 100,
+      paddingBottom: 100,
+    },
+    mapcont: {
+      flex: 1,
+      width: "100%", 
+      height: "100%",
+      alignItems: 'center',
+    },
+  
+    infoText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    map: {
+      width: 300,
+      height: 300,
+    },
+  });
+
+
