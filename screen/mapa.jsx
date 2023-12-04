@@ -11,6 +11,20 @@ const MapaJanda = () => {
   const [subscription, setSubscription] = useState(null);
   const [backgroundColor, setBackgroundColor] = useState('white');
 
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Não tem permissão');
+        return;
+      }
+
+      let info = await Location.getCurrentPositionAsync({});
+      console.log(info);
+      setLocation(info);
+    })();
+  }, []);
+
   const getPositiveHeading = (heading) => (heading < 0 ? 360 + heading : heading);
 
   const subscribe = () => {
@@ -20,10 +34,6 @@ const MapaJanda = () => {
   const unsubscribe = () => {
     subscription?.remove();
     setSubscription(null);
-  };
-
-  const toggleListener = () => {
-    subscription ? unsubscribe() : subscribe();
   };
 
   const magnetometerListener = (data) => {
@@ -76,7 +86,13 @@ const MapaJanda = () => {
         <Text style={styles.infoText}>
           Magnetometro:{'\n'}
           z: {magnetometer?.z || 'Loading...'} {'\n'}
-          Latitude: {location?.coords?.latitude || 'Loading...'}, Longitude: {location?.coords?.longitude || 'Loading...'}
+          {location ? (
+            <>
+              Latitude: {location.coords.latitude}, Longitude: {location.coords.longitude}
+            </>
+          ) : (
+            'Location not available'
+          )}
         </Text>
       </View>
 
